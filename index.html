@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aviator Crash Game</title>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-database.js"></script>
+  <style>
+    /* Global Styles */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1b1b1b;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    /* Main Menu Styles */
+    #mainMenu {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    #mainMenu input {
+      margin: 5px;
+      padding: 10px;
+      width: 300px;
+      border-radius: 4px;
+      border: none;
+      font-size: 16px;
+    }
+    #mainMenu button {
+      margin: 5px;
+      padding: 10px 20px;
+      border-radius: 4px;
+      border: none;
+      background-color: #e91e63;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #mainMenu button:hover { background-color: #ff4081; }
+    #mainMenu h1 { margin-bottom: 20px; }
+    #authMessage { margin-top: 10px; font-size: 14px; }
+    
+    /* Game Wrapper with Plain Gray Background */
+    .game-wrapper {
+      width: 100%;
+      background-color: #444;
+      padding: 20px 0;
+    }
+    
+    /* Game Container (shown after login) */
+    #gameContainer {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      background-color: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    /* TOP BAR */
+    .top-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #262626;
+      padding: 10px 20px;
+    }
+    .aviator-logo {
+      font-size: 1.5rem;
+      color: #e91e63;
+      font-weight: bold;
+    }
+    .previous-multipliers {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+    .multiplier-chip {
+      background-color: #333;
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: #f0f0f0;
+    }
+    .mode-balance {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+    .balance-amount {
+      font-size: 0.9rem;
+      color: #00e676;
+      font-weight: bold;
+    }
+    /* Updated Logout Button (Right Side, Small & Clean) */
+    .menu-icon {
+      font-size: 0.9rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      background-color: #e91e63;
+      border-radius: 4px;
+      color: #fff;
+    }
+    
+    /* CENTER GAME DISPLAY */
+    .game-display {
+      width: 100%;
+      height: 300px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 20px 0;
+      background: #1b1b1b;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .multiplier-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .bg-stripes {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      background: radial-gradient(ellipse at center, rgba(255,0,0,0.2) 0%, rgba(0,0,0,0.8) 80%);
+      background-image:
+        repeating-linear-gradient(-45deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 10px, transparent 10px, transparent 20px),
+        radial-gradient(ellipse at center, rgba(255,0,0,0.2) 0%, rgba(0,0,0,0.8) 80%);
+      background-blend-mode: multiply;
+    }
+    .multiplier-value {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #ff4081;
+      text-shadow: 0 0 10px rgba(255,64,129,0.7);
+      background: url('') no-repeat center center;
+      background-size: cover;
+      padding: 100px;
+      border-radius: 6px;
+    }
+    
+    /* Timer & Status Message */
+    #betTimer {
+      position: absolute;
+      top: 5%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ff4081;
+      text-shadow: 0 0 5px rgba(0,0,0,0.7);
+      white-space: nowrap;
+    }
+    #statusMessage {
+      position: absolute;
+      bottom: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ff80ab;
+      text-shadow: 0 0 5px rgba(0,0,0,0.7);
+      white-space: nowrap;
+    }
+    
+    /* Plane (Clean Look, No Extra Indicators) */
+    .plane {
+      position: absolute;
+      bottom: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      pointer-events: none;
+      animation: flyBobbing 2s infinite ease-in-out;
+    }
+    .plane img { width: 100%; height: auto; }
+    @keyframes flyBobbing {
+      0% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-10px); }
+      100% { transform: translateX(-50%) translateY(0); }
+    }
+    @keyframes explosion {
+      0% { transform: translateX(-50%) scale(1); opacity: 1; }
+      50% { transform: translateX(-50%) scale(1.5); opacity: 0.5; }
+      100% { transform: translateX(-50%) scale(2); opacity: 0; }
+    }
+    .exploded { animation: explosion 0.5s forwards; }
+    
+    /* BOTTOM BET PANELS */
+    .bottom-area {
+      width: 100%;
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      padding: 10px 0;
+      gap: 20px;
+      transition: opacity 0.3s ease;
+    }
+    .bet-box {
+      flex: 1;
+      background-color: #262626;
+      border-radius: 6px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 200px;
+    }
+    .bet-title {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .bet-amount {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 10px;
+      white-space: nowrap;
+    }
+    .bet-amount button {
+      width: 30px;
+      height: 30px;
+      background-color: #333;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .bet-amount button:hover { background-color: #444; }
+    .bet-amount input {
+      width: 60px;
+      text-align: center;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background-color: #444;
+      color: #fff;
+      height: 30px;
+      white-space: nowrap;
+    }
+    .bet-button {
+      width: 100%;
+      padding: 10px 0;
+      background-color: #e91e63;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .bet-button:hover { background-color: #ff4081; }
+    @media (max-width: 768px) {
+      .top-bar, .bottom-area { flex-direction: column; align-items: flex-start; }
+      .previous-multipliers { margin-top: 10px; flex-wrap: wrap; justify-content: flex-start; }
+      .game-display { height: 250px; }
+      .multiplier-value { font-size: 2rem; }
+      .plane { width: 60px; }
+      .bet-box { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Main Menu (Login/Registration) -->
+  <div id="mainMenu">
+    <h1>Aviator Crash Game</h1>
+    <input type="email" id="emailInput" placeholder="Enter your email">
+    <input type="password" id="passwordInput" placeholder="Enter your password">
+    <button id="loginBtn">Login</button>
+    <button id="registerBtn">Register</button>
+    <p id="authMessage"></p>
+  </div>
+  
+  <!-- Game Wrapper with Plain Gray Background -->
+  <div class="game-wrapper">
+    <!-- Game Container (shown after login) -->
+    <div id="gameContainer">
+      <!-- TOP BAR -->
+      <div class="top-bar">
+        <div class="aviator-logo">Aviator</div>
+        <div class="previous-multipliers" id="previousMultipliers"></div>
+        <div class="mode-balance">
+          <span class="balance-amount" id="balanceAmount">Loading...</span>
+          <div class="menu-icon" id="logoutBtn">Logout</div>
+        </div>
+      </div>
+      
+      <!-- CENTER GAME DISPLAY -->
+      <div class="game-display">
+        <div class="multiplier-container">
+          <div class="bg-stripes"></div>
+          <div class="multiplier-value" id="multiplierValue">1.00x</div>
+          <div id="betTimer"></div>
+          <div id="statusMessage"></div>
+          <div class="plane" id="planeElement">
+            <img src="https://i.imgur.com/bSdozZz.png" alt="Plane">
+          </div>
+        </div>
+      </div>
+      
+      <!-- BOTTOM BET PANELS -->
+      <div class="bottom-area" id="bettingArea">
+        <!-- BET Panel -->
+        <div class="bet-box">
+          <div class="bet-title">Place Bet</div>
+          <div class="bet-amount">
+            <button id="betMinus">-</button>
+            <input type="text" id="betInput" value="10.00">
+            <button id="betPlus">+</button>
+          </div>
+          <button class="bet-button" id="betBtn">Place Bet 10.00 PKR</button>
+        </div>
+        <!-- AUTO Panel -->
+        <div class="bet-box">
+          <div class="bet-title">Auto Bet</div>
+          <div class="bet-amount">
+            <button id="autoMinus">-</button>
+            <input type="text" id="autoInput" value="10.00">
+            <button id="autoPlus">+</button>
+          </div>
+          <button class="bet-button" id="autoBtn">Place Bet 10.00 PKR</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Firebase & Game Script -->
+  <script>
+    // Firebase initialization
+    var firebaseConfig = {
+      apiKey: "AIzaSyD15UsQ2li840vEs120Vkzzz8h7fnJcoGQ",
+      authDomain: "x-bet-81dec.firebaseapp.com",
+      databaseURL: "https://x-bet-81dec-default-rtdb.firebaseio.com",
+      projectId: "x-bet-81dec",
+      storageBucket: "x-bet-81dec.firebasestorage.app",
+      messagingSenderId: "410232553807",
+      appId: "1:410232553807:web:8bb127538b4ecc390e053a",
+      measurementId: "G-LD1841KJ54"
+    };
+    firebase.initializeApp(firebaseConfig);
+    
+    // Initialize Firebase services
+    const auth = firebase.auth();
+    const database = firebase.database();
+  
+    // DOM Elements for Authentication/Main Menu
+    const mainMenuEl = document.getElementById('mainMenu');
+    const gameContainerEl = document.getElementById('gameContainer');
+    const emailInput = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const authMessage = document.getElementById('authMessage');
+    const logoutBtn = document.getElementById('logoutBtn');
+  
+    // DOM Elements for Game
+    const balanceAmountEl = document.getElementById('balanceAmount');
+    const multiplierValueEl = document.getElementById('multiplierValue');
+    const previousMultipliersEl = document.getElementById('previousMultipliers');
+    const planeElement = document.getElementById('planeElement');
+    const betTimerEl = document.getElementById('betTimer');
+    const statusMessageEl = document.getElementById('statusMessage');
+    const bettingAreaEl = document.getElementById('bettingArea');
+  
+    // Betting Elements
+    const betInput = document.getElementById('betInput');
+    const betMinus = document.getElementById('betMinus');
+    const betPlus = document.getElementById('betPlus');
+    const betBtn = document.getElementById('betBtn');
+    const autoInput = document.getElementById('autoInput');
+    const autoMinus = document.getElementById('autoMinus');
+    const autoPlus = document.getElementById('autoPlus');
+    const autoBtn = document.getElementById('autoBtn');
+  
+    // Global Game State Variables
+    let balance = 0;  // Loaded from Firebase for the logged-in user
+    let betActive = false, betValue = 0;
+    let autoActive = false, autoValue = 0;
+    let currentMultiplier = 1.00;
+    let crashPoint = 0;
+    let isRunning = false;
+    let roundInterval = null;
+    let roundTime = 0;
+    let previousMultipliers = [];
+    let bettingOpen = false;
+    let bettingCountdownInterval = null;
+  
+    let currentUser = null;  // Holds the logged-in user
+  
+    // Listen for authentication state changes
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        currentUser = user;
+        // Hide main menu; show game container
+        mainMenuEl.style.display = 'none';
+        gameContainerEl.style.display = 'block';
+  
+        // Load user’s coin balance (initialize to 30.00 if not present)
+        const userBalanceRef = database.ref('users/' + user.uid + '/coinBalance');
+        userBalanceRef.once('value').then(snapshot => {
+          if (snapshot.exists()) {
+            balance = parseFloat(snapshot.val());
+          } else {
+            balance = 30.00;
+            userBalanceRef.set(balance);
+          }
+          updateBalanceDisplay();
+          // Start game betting phase after login
+          openBettingPhase();
+        });
+  
+      } else {
+        currentUser = null;
+        mainMenuEl.style.display = 'flex';
+        gameContainerEl.style.display = 'none';
+      }
+    });
+  
+    // Login functionality
+    loginBtn.addEventListener('click', () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => { authMessage.textContent = "Login successful!"; })
+        .catch(error => { authMessage.textContent = "Error: " + error.message; });
+    });
+  
+    // Registration functionality
+    registerBtn.addEventListener('click', () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          authMessage.textContent = "Registration successful!";
+          const user = userCredential.user;
+          database.ref('users/' + user.uid + '/coinBalance').set(30.00);
+        })
+        .catch(error => { authMessage.textContent = "Error: " + error.message; });
+    });
+  
+    // Logout functionality
+    logoutBtn.addEventListener('click', () => { auth.signOut(); });
+  
+    // Update balance display and sync with Firebase for current user
+    function updateBalanceDisplay() {
+      balanceAmountEl.textContent = `Balance: $${balance.toFixed(2)} PKR`;
+      if (currentUser) {
+        database.ref('users/' + currentUser.uid + '/coinBalance').set(balance);
+      }
+    }
+  
+    // Parse bet input
+    function parseBet(inputEl) {
+      const val = parseFloat(inputEl.value);
+      return isNaN(val) || val <= 0 ? 0 : val;
+    }
+  
+    // Pick crash point using custom distribution:
+    function pickCrashPoint() {
+      const r = Math.random();
+      if (r < 0.5) return (1 + Math.random() * 1).toFixed(2);
+      else if (r < 0.8) return (2 + Math.random() * 3).toFixed(2);
+      else if (r < 0.95) return (5 + Math.random() * 5).toFixed(2);
+      else return (10 + Math.random() * 40).toFixed(2);
+    }
+  
+    // Open betting phase (10 seconds)
+    function openBettingPhase() {
+      bettingOpen = true;
+      betActive = false; autoActive = false;
+      betValue = 0; autoValue = 0;
+      betBtn.textContent = `Place Bet ${parseBet(betInput).toFixed(2)} PKR`;
+      autoBtn.textContent = `Place Bet ${parseBet(autoInput).toFixed(2)} PKR`;
+      statusMessageEl.textContent = "";
+      bettingAreaEl.style.opacity = '1';
+      let countdown = 10;
+      betTimerEl.textContent = `Ends in: ${countdown}s`;
+      bettingCountdownInterval = setInterval(() => {
+        countdown--;
+        betTimerEl.textContent = `Ends in: ${countdown}s`;
+        if (countdown <= 0) {
+          clearInterval(bettingCountdownInterval);
+          betTimerEl.textContent = "";
+          bettingOpen = false;
+          startRound();
+        }
+      }, 1000);
+    }
+  
+    // Start game round (bets locked)
+    function startRound() {
+      crashPoint = pickCrashPoint();
+      currentMultiplier = 1.00;
+      roundTime = 0;
+      isRunning = true;
+      planeElement.classList.remove('exploded');
+      multiplierValueEl.textContent = '1.00x';
+      statusMessageEl.textContent = "";
+      bettingAreaEl.style.opacity = '0.5';
+      if (roundInterval) clearInterval(roundInterval);
+      roundInterval = setInterval(() => {
+        roundTime += 100;
+        currentMultiplier = 1 + (roundTime / 1000) * 0.5;
+        if (currentMultiplier > 40) currentMultiplier *= 1.002;
+        multiplierValueEl.textContent = currentMultiplier.toFixed(2) + 'x';
+        if (currentMultiplier >= parseFloat(crashPoint)) {
+          currentMultiplier = parseFloat(crashPoint);
+          multiplierValueEl.textContent = currentMultiplier.toFixed(2) + 'x CRASH!';
+          isRunning = false;
+          clearInterval(roundInterval);
+          planeElement.classList.add('exploded');
+          if (betActive) {
+            betActive = false;
+            betValue = 0;
+            betBtn.textContent = `Place Bet ${parseBet(betInput).toFixed(2)} PKR`;
+            statusMessageEl.textContent = "You did not cash out, bet lost.";
+          }
+          if (autoActive) {
+            autoActive = false;
+            autoValue = 0;
+            autoBtn.textContent = `Place Bet ${parseBet(autoInput).toFixed(2)} PKR`;
+            statusMessageEl.textContent = "Auto cash out not made, bet lost.";
+          }
+          previousMultipliers.unshift(currentMultiplier.toFixed(2) + 'x');
+          if (previousMultipliers.length > 8) previousMultipliers.pop();
+          updatePreviousMultipliers();
+          setTimeout(openBettingPhase, 30);
+        }
+      }, 100);
+    }
+  
+    // Update previous multipliers display (Game History)
+    function updatePreviousMultipliers() {
+      previousMultipliersEl.innerHTML = '';
+      previousMultipliers.forEach(m => {
+        const chip = document.createElement('div');
+        chip.classList.add('multiplier-chip');
+        chip.textContent = m;
+        previousMultipliersEl.appendChild(chip);
+      });
+    }
+  
+    // BET button handler
+    betBtn.addEventListener('click', () => {
+      if (bettingOpen && !isRunning) {
+        let val = parseBet(betInput);
+        if (val === 0) { statusMessageEl.textContent = "Please enter a valid bet amount."; return; }
+        if (val > balance) { statusMessageEl.textContent = "Insufficient balance!"; return; }
+        balance -= val;
+        updateBalanceDisplay();
+        betValue = val;
+        betActive = true;
+        betBtn.textContent = 'CASH OUT';
+        statusMessageEl.textContent = `Bet of $${val.toFixed(2)} placed.`;
+      } else if (isRunning && betActive) {
+        const winnings = betValue * currentMultiplier;
+        balance += winnings;
+        updateBalanceDisplay();
+        statusMessageEl.textContent = `Cashed out at ${currentMultiplier.toFixed(2)}x for $${winnings.toFixed(2)}.`;
+        betActive = false;
+        betValue = 0;
+        betBtn.textContent = `Place Bet ${parseBet(betInput).toFixed(2)} PKR`;
+      } else {
+        statusMessageEl.textContent = "Betting is closed.";
+      }
+    });
+  
+    // AUTO button handler
+    autoBtn.addEventListener('click', () => {
+      if (bettingOpen && !isRunning) {
+        let val = parseBet(autoInput);
+        if (val === 0) { statusMessageEl.textContent = "Please enter a valid bet amount."; return; }
+        if (val > balance) { statusMessageEl.textContent = "Insufficient balance!"; return; }
+        balance -= val;
+        updateBalanceDisplay();
+        autoValue = val;
+        autoActive = true;
+        autoBtn.textContent = 'CASH OUT';
+        statusMessageEl.textContent = `Auto bet of $${val.toFixed(2)} placed.`;
+      } else if (isRunning && autoActive) {
+        const winnings = autoValue * currentMultiplier;
+        balance += winnings;
+        updateBalanceDisplay();
+        statusMessageEl.textContent = `Auto cashed out at ${currentMultiplier.toFixed(2)}x for $${winnings.toFixed(2)}.`;
+        autoActive = false;
+        autoValue = 0;
+        autoBtn.textContent = `Place Bet ${parseBet(autoInput).toFixed(2)} PKR`;
+      } else {
+        statusMessageEl.textContent = "Betting is closed.";
+      }
+    });
+  </script>
+</body>
+</html>
