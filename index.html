@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Responsive viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aviator Crash Game</title>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.20.0/firebase-database.js"></script>
+
+  <style>
+    /* Basic Reset and disable scrolling */
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #101020, #202040);
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    /* Login Panel */
+    #loginPanel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+    #loginPanel h1 {
+      margin-bottom: 20px;
+    }
+    #loginPanel input {
+      width: 300px;
+      padding: 10px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    #loginPanel button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      background-color: #e91e63;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #loginPanel button:hover {
+      background-color: #ff4081;
+    }
+    #authMessage {
+      margin-top: 10px;
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    /* Game Panel */
+    #gamePanel {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: rgba(38,38,38,0.9);
+      padding: 10px 16px;
+    }
+    .balance-amount {
+      font-size: 1rem;
+      font-weight: bold;
+    }
+    .top-button {
+      background-color: #e91e63;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .top-button:hover {
+      background-color: #ff4081;
+    }
+
+    /* Round History (top) with light background */
+    .history-panel {
+      position: relative;
+      padding: 10px;
+      text-align: center;
+      background-color: rgba(255,255,255,0.07);
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+    .history-panel span {
+      padding: 5px 10px;
+      margin: 0 4px;
+      border-radius: 4px;
+      background-color: rgba(255,255,255,0.1);
+      display: inline-block;
+    }
+    .history-panel::after {
+      content: "";
+      display: block;
+      width: 90%;
+      height: 1px;
+      background-color: #fff;
+      opacity: 0.2;
+      margin: 10px auto 0 auto;
+    }
+
+    /* Game Logo */
+    .game-logo {
+      text-align: center;
+      margin: 10px 0;
+    }
+    .game-logo img {
+      max-width: 140px;
+      height: auto;
+    }
+
+    /* Game View (Circular Area) */
+    .game-view {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 20px auto;
+      background: linear-gradient(135deg, #ff4081, #e91e63);
+      border: 2px solid #444;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Info Overlay centered within the circle */
+    .info-overlay {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .info-overlay .multiplier {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 5px rgba(0,0,0,0.7);
+    }
+    .info-overlay .timer {
+      font-size: 1.2rem;
+      margin-top: 10px;
+      color: #fff;
+    }
+    .plane-orbit {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: visible;
+    }
+    .plane-orbit img {
+      width: 80px;
+      height: 80px;
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translate(-50%, -50%);
+    }
+    @keyframes rotatePlane {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes planePulse {
+      0%   { transform: translate(-50%, -50%) scale(1); }
+      50%  { transform: translate(-50%, -50%) scale(1.3); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    .crash-pulse {
+      animation: planePulse 0.5s ease-in-out infinite;
+    }
+
+    /* Betting Container with two separate buttons */
+    .betting-container {
+      width: 450px;
+      margin: 0 auto;
+      background-color: #262626;
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .bet-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+    }
+    .bet-title {
+      font-size: 1rem;
+      font-weight: bold;
+    }
+    .bet-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .bet-controls button {
+      width: 32px;
+      height: 32px;
+      background-color: #333;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+    }
+    .bet-controls input {
+      width: 70px;
+      text-align: center;
+      border: none;
+      border-radius: 4px;
+      background-color: #444;
+      color: #fff;
+      height: 32px;
+    }
+    .bet-button {
+      background-color: #e91e63;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 14px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+      min-width: 110px;
+      text-align: center;
+    }
+    .bet-button:hover {
+      background-color: #ff4081;
+    }
+
+    /* Bet History Trigger (aligned to right) */
+    .bet-history-container {
+      text-align: right;
+      padding: 0 10px;
+      margin-bottom: 10px;
+    }
+    #betHistoryBtn {
+      background-color: #555;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    #betHistoryBtn:hover {
+      background-color: #666;
+    }
+
+    /* Bet History Modal */
+    #betHistoryModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background-color: #fff;
+      color: #000;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80%;
+      overflow-y: auto;
+      padding: 20px;
+      border-radius: 8px;
+      position: relative;
+    }
+    .close-modal {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .betting-container {
+        width: 90%;
+      }
+      .game-view {
+        width: 250px;
+        height: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Panel -->
+  <div id="loginPanel">
+    <h1>Aviator Crash Game</h1>
+    <input type="email" id="emailInput" placeholder="Enter your email">
+    <input type="password" id="passwordInput" placeholder="Enter your password">
+    <button id="loginBtn">Login</button>
+    <button id="registerBtn">Register</button>
+    <p id="authMessage"></p>
+  </div>
+
+  <!-- Game Panel -->
+  <div id="gamePanel">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="balance-amount" id="balanceAmount">Balance: Loading...</div>
+      <button id="logoutBtn" class="top-button">Logout</button>
+    </div>
+
+    <!-- Round History -->
+    <div class="history-panel" id="historyPanel">
+      <!-- Previous rounds will be shown here -->
+    </div>
+
+    <!-- Game Logo -->
+    <div class="game-logo">
+      <img src="https://i.imgur.com/TL9Dyde.png" alt="Game Logo">
+    </div>
+
+    <!-- Game View -->
+    <div class="game-view">
+      <div class="plane-orbit" id="planeOrbit">
+        <img src="https://i.imgur.com/napBThL.png" alt="Plane" id="planeImg">
+      </div>
+      <div class="info-overlay">
+        <div class="multiplier" id="multiplierValue">1.00x</div>
+        <div class="timer" id="betTimer">Ends in: 6s</div>
+      </div>
+    </div>
+
+    <!-- Status Message (Below Game View) -->
+    <div id="statusMessage" style="text-align:center; margin:10px 0;"></div>
+
+    <!-- Betting Container with two separate buttons -->
+    <div class="betting-container">
+      <!-- Manual Bet Row -->
+      <div class="bet-row">
+        <span class="bet-title">Place Bet</span>
+        <div class="bet-controls">
+          <button id="betMinus">-</button>
+          <input type="text" id="betInput" value="10.00">
+          <button id="betPlus">+</button>
+        </div>
+        <button class="bet-button" id="betBtn">Place Bet 10.00 PKR</button>
+      </div>
+      <!-- Auto Bet Row -->
+      <div class="bet-row">
+        <span class="bet-title">Auto Bet</span>
+        <div class="bet-controls">
+          <button id="autoBetMinus">-</button>
+          <input type="text" id="autoBetInput" value="10.00">
+          <button id="autoBetPlus">+</button>
+        </div>
+        <button class="bet-button" id="autoBetBtn">Auto Bet 10.00 PKR</button>
+      </div>
+    </div>
+
+    <!-- Bet History Trigger -->
+    <div class="bet-history-container">
+      <button id="betHistoryBtn">Bet Histories</button>
+    </div>
+  </div>
+
+  <!-- Bet History Modal -->
+  <div id="betHistoryModal">
+    <div class="modal-content">
+      <span class="close-modal" id="closeModalBtn">&times;</span>
+      <h3>Bet Histories</h3>
+      <div id="betHistoryList"></div>
+    </div>
+  </div>
+
+  <!-- Background Audio (Autoplay, Loop, Playsinline, and Preload) -->
+  <audio id="backgroundAudio" autoplay loop playsinline preload="auto">
+    <source src="aviator background sounds .mp3" type="audio/mp3">
+    Your browser does not support the audio element.
+  </audio>
+
+  <script>
+    /****************************************************
+     *************** Firebase Initialization ************
+     ****************************************************/
+    const firebaseConfig = {
+      apiKey: "AIzaSyACWflEuk20fwT9FxoIZAmUY9UoHeU9HWY",
+      authDomain: "lacky-777.firebaseapp.com",
+      databaseURL: "https://lacky-777-default-rtdb.firebaseio.com",
+      projectId: "lacky-777",
+      storageBucket: "lacky-777.firebasestorage.app",
+      messagingSenderId: "511980111053",
+      appId: "1:511980111053:web:638227b3b60c98878b1584",
+      measurementId: "G-DEND6HY1QP"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    // Global game state reference
+    const gameStateRef = database.ref('gameState');
+
+    /****************************************************
+     *************** Sound System Setup *****************
+     ****************************************************/
+    // Replace the placeholder file names with your actual sound file paths.
+    const startSounds = ["multiple starting sounds .mp3", "aviator background sounds .mp3"];
+    const crashSounds = ["aviator crushing sound .mp3", "multiple starting sounds .mp3"];
+
+    function playStartSound() {
+      const randomIndex = Math.floor(Math.random() * startSounds.length);
+      let audio = new Audio(startSounds[randomIndex]);
+      audio.play();
+    }
+
+    function playCrashSound() {
+      const randomIndex = Math.floor(Math.random() * crashSounds.length);
+      let audio = new Audio(crashSounds[randomIndex]);
+      audio.play();
+    }
+
+    /****************************************************
+     ***************** DOM Elements *********************
+     ****************************************************/
+    // Login Panel
+    const loginPanel = document.getElementById('loginPanel');
+    const emailInput = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const authMessage = document.getElementById('authMessage');
+
+    // Game Panel
+    const gamePanel = document.getElementById('gamePanel');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const balanceAmountEl = document.getElementById('balanceAmount');
+    const historyPanel = document.getElementById('historyPanel');
+    const multiplierValueEl = document.getElementById('multiplierValue');
+    const betTimerEl = document.getElementById('betTimer');
+    const statusMessageEl = document.getElementById('statusMessage');
+
+    // Manual Betting Elements
+    const betInputEl = document.getElementById('betInput');
+    const betMinus = document.getElementById('betMinus');
+    const betPlus = document.getElementById('betPlus');
+    const betBtn = document.getElementById('betBtn');
+
+    // Auto Betting Elements
+    const autoBetInputEl = document.getElementById('autoBetInput');
+    const autoBetMinus = document.getElementById('autoBetMinus');
+    const autoBetPlus = document.getElementById('autoBetPlus');
+    const autoBetBtn = document.getElementById('autoBetBtn');
+
+    // Bet History Modal
+    const betHistoryBtn = document.getElementById('betHistoryBtn');
+    const betHistoryModal = document.getElementById('betHistoryModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const betHistoryList = document.getElementById('betHistoryList');
+
+    // Plane and Orbit
+    const planeOrbitEl = document.getElementById('planeOrbit');
+    const planeImgEl = document.getElementById('planeImg');
+
+    /****************************************************
+     ***************** Game Variables *******************
+     ****************************************************/
+    let currentUser = null;
+    let balance = 0;
+    let betActive = false, betValue = 0;
+    let autoBetActive = false, autoBetValue = 0;
+    let currentMultiplier = 1.00;
+    let crashPoint = 0;
+    let isRunning = false;
+    let roundInterval = null;
+    let roundTime = 0;
+    let bettingOpen = false;
+    let bettingCountdownInterval = null;
+
+    // Histories (limit history to last 10 entries)
+    let betHistories = [];
+    let roundHistories = [];
+
+    /****************************************************
+     ************ Initialize / Auth / Database **********
+     ****************************************************/
+    function initializeGameState() {
+      const defaultState = {
+        isRunning: false,
+        currentMultiplier: 0.90,
+        countdown: 6,
+        previousMultipliers: []
+      };
+      gameStateRef.set(defaultState);
+    }
+
+    gameStateRef.on('value', snapshot => {
+      if(snapshot.exists()){
+        const gameState = snapshot.val();
+        if(gameState.isRunning){
+          multiplierValueEl.textContent = gameState.currentMultiplier.toFixed(2) + 'x';
+        } else {
+          betTimerEl.textContent = `Ends in: ${gameState.countdown}s`;
+        }
+        const histories = gameState.previousMultipliers || [];
+        // Rebuild history panel in a continuous line
+        historyPanel.innerHTML = "";
+        histories.forEach(item => {
+          const span = document.createElement("span");
+          span.textContent = item;
+          const mVal = parseFloat(item.replace('x',''));
+          if(mVal < 2) {
+            span.style.color = "red";
+          } else if(mVal >= 2 && mVal <= 10) {
+            span.style.color = "yellow";
+          } else {
+            span.style.color = "blue";
+          }
+          historyPanel.appendChild(span);
+        });
+      } else {
+        initializeGameState();
+      }
+    });
+
+    /****************************************************
+     *********** Authentication Handling ***************
+     ****************************************************/
+    auth.onAuthStateChanged(user => {
+      if(user){
+        currentUser = user;
+        loginPanel.style.display = 'none';
+        gamePanel.style.display = 'flex';
+        // Start background audio upon user login
+        const bgAudio = document.getElementById("backgroundAudio");
+        bgAudio.play().catch(function(error) {
+          console.log("Background audio playback failed: " + error);
+        });
+        const userBalanceRef = database.ref('users/' + user.uid + '/coinBalance');
+        userBalanceRef.once('value').then(snapshot => {
+          if(snapshot.exists()){
+            balance = parseFloat(snapshot.val());
+          } else {
+            balance = 30.00;
+            userBalanceRef.set(balance);
+          }
+          updateBalanceDisplay();
+          if(!isRunning) {
+            openBettingPhase();
+          }
+        });
+      } else {
+        currentUser = null;
+        loginPanel.style.display = 'flex';
+        gamePanel.style.display = 'none';
+      }
+    });
+
+    loginBtn.addEventListener('click', () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => { authMessage.textContent = "Login successful!"; })
+        .catch(error => { authMessage.textContent = "Error: " + error.message; });
+    });
+
+    registerBtn.addEventListener('click', () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          authMessage.textContent = "Registration successful!";
+          const user = userCredential.user;
+          database.ref('users/' + user.uid + '/coinBalance').set(30.00);
+        })
+        .catch(error => { authMessage.textContent = "Error: " + error.message; });
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      auth.signOut();
+    });
+
+    /****************************************************
+     ****************** Helper Functions ****************
+     ****************************************************/
+    function updateBalanceDisplay() {
+      balanceAmountEl.textContent = `Balance: ${balance.toFixed(2)} PKR`;
+      if(currentUser){
+        database.ref('users/' + currentUser.uid + '/coinBalance').set(balance);
+      }
+    }
+
+    function parseBet(inputEl) {
+      const val = parseFloat(inputEl.value);
+      return isNaN(val) || val <= 0 ? 0 : val;
+    }
+
+    /****************************************************
+     ******************** Betting Phase *****************
+     ****************************************************/
+    function openBettingPhase() {
+      bettingOpen = true;
+      // Reset both manual and auto bet flags
+      betActive = false;
+      autoBetActive = false;
+      betValue = 0;
+      autoBetValue = 0;
+      betBtn.textContent = `Place Bet ${parseBet(betInputEl).toFixed(2)} PKR`;
+      autoBetBtn.textContent = `Auto Bet ${parseBet(autoBetInputEl).toFixed(2)} PKR`;
+      let countdown = 6;  // 6 seconds betting phase
+      betTimerEl.textContent = `Ends in: ${countdown}s`;
+      gameStateRef.update({
+        isRunning: false,
+        countdown: countdown
+      });
+      if(bettingCountdownInterval) clearInterval(bettingCountdownInterval);
+      bettingCountdownInterval = setInterval(() => {
+        countdown--;
+        betTimerEl.textContent = `Ends in: ${countdown}s`;
+        gameStateRef.update({
+          countdown: countdown
+        });
+        if(countdown <= 0){
+          clearInterval(bettingCountdownInterval);
+          betTimerEl.textContent = "";
+          bettingOpen = false;
+          startRound();
+        }
+      }, 1000);
+    }
+
+    /****************************************************
+     ******************** Start Round *******************
+     ****************************************************/
+    function startRound() {
+      playStartSound();  // Play a start sound at round start
+      crashPoint = pickCrashPoint();
+      currentMultiplier = 1.00;
+      roundTime = 0;
+      isRunning = true;
+      multiplierValueEl.textContent = '1.00x';
+      statusMessageEl.textContent = "";
+
+      gameStateRef.update({
+        isRunning: true,
+        currentMultiplier: currentMultiplier
+      });
+
+      // Reset plane position and animation
+      planeOrbitEl.style.animation = 'none';
+      planeImgEl.classList.remove('crash-pulse');
+      planeImgEl.style.transform = 'translate(-50%, -50%)';
+      void planeOrbitEl.offsetWidth;
+      planeOrbitEl.style.animation = 'rotatePlane 3s linear infinite';
+
+      if(roundInterval) clearInterval(roundInterval);
+      roundInterval = setInterval(() => {
+        roundTime += 100;  // update every 100ms for slower growth
+        currentMultiplier = updateMultiplier(currentMultiplier);
+        gameStateRef.update({
+          currentMultiplier: currentMultiplier
+        });
+        multiplierValueEl.textContent = currentMultiplier.toFixed(2) + 'x';
+
+        if(currentMultiplier >= parseFloat(crashPoint)){
+          currentMultiplier = parseFloat(crashPoint);
+          multiplierValueEl.textContent = currentMultiplier.toFixed(2) + 'x CRASH!';
+          isRunning = false;
+          clearInterval(roundInterval);
+          planeOrbitEl.style.animationPlayState = 'paused';
+          planeImgEl.classList.add('crash-pulse');
+          playCrashSound();  // Play a crash sound when the round crashes
+
+          // Manual Bet result
+          if(betActive){
+            betHistories.push({
+              type: "Bet Lost",
+              bet: betValue,
+              multiplier: currentMultiplier.toFixed(2),
+              time: new Date().toLocaleTimeString()
+            });
+            betActive = false;
+            betValue = 0;
+            betBtn.textContent = `Place Bet ${parseBet(betInputEl).toFixed(2)} PKR`;
+            statusMessageEl.textContent = "Bet lost.";
+          }
+          // Auto Bet result
+          if(autoBetActive){
+            betHistories.push({
+              type: "Auto Bet Lost",
+              bet: autoBetValue,
+              multiplier: currentMultiplier.toFixed(2),
+              time: new Date().toLocaleTimeString()
+            });
+            autoBetActive = false;
+            autoBetValue = 0;
+            autoBetBtn.textContent = `Auto Bet ${parseBet(autoBetInputEl).toFixed(2)} PKR`;
+            statusMessageEl.textContent = "Auto bet lost.";
+          }
+          // Add new round history; if more than 10 entries, remove the oldest one
+          roundHistories.unshift(currentMultiplier.toFixed(2) + 'x');
+          if(roundHistories.length > 10) {
+            roundHistories.pop();
+          }
+          gameStateRef.update({
+            isRunning: false,
+            previousMultipliers: roundHistories
+          });
+          // Hold for 3 seconds after crash before next round starts
+          setTimeout(openBettingPhase, 3000);
+        }
+      }, 100);
+    }
+
+    // Update multiplier based on zones (adjusted thresholds)
+    function updateMultiplier(multVal) {
+      let nextVal = multVal;
+      if(multVal < 1.5) {
+        nextVal += 0.007;
+      } else if(multVal < 3) {
+        nextVal += 0.015;
+      } else {
+        nextVal += 0.025;
+      }
+      return nextVal;
+    }
+
+    // Crash point selection (increased chance for high multipliers)
+    function pickCrashPoint() {
+      const r = Math.random();
+      if(r < 0.7) {
+        // 70% chance: 1.00 to 1.50
+        return (1 + Math.random() * 0.5).toFixed(2);
+      } else if(r < 0.9) {
+        // 20% chance: 1.5 to 3.0
+        return (1.5 + Math.random() * 1.5).toFixed(2);
+      } else {
+        // 10% chance: 3.0 to 7.0
+        return (3 + Math.random() * 4).toFixed(2);
+      }
+    }
+
+    /****************************************************
+     ******************** Bet Actions *******************
+     ****************************************************/
+    // Manual Bet Controls
+    betMinus.addEventListener('click', () => {
+      let val = parseBet(betInputEl);
+      val = Math.max(0, val - 1);
+      betInputEl.value = val.toFixed(2);
+      betBtn.textContent = `Place Bet ${val.toFixed(2)} PKR`;
+    });
+    betPlus.addEventListener('click', () => {
+      let val = parseBet(betInputEl);
+      val += 1;
+      betInputEl.value = val.toFixed(2);
+      betBtn.textContent = `Place Bet ${val.toFixed(2)} PKR`;
+    });
+
+    betBtn.addEventListener('click', () => {
+      // Only trigger manual bet if auto bet is not active
+      if(bettingOpen && !betActive && !autoBetActive) {
+        betValue = parseBet(betInputEl);
+        if(betValue <= 0) {
+          statusMessageEl.textContent = "Invalid bet amount.";
+          return;
+        }
+        if(betValue > balance) {
+          statusMessageEl.textContent = "Insufficient balance.";
+          return;
+        }
+        betActive = true;
+        balance -= betValue;
+        updateBalanceDisplay();
+        betBtn.textContent = "Cash Out";
+        statusMessageEl.textContent = "Bet placed. Click 'Cash Out' to exit.";
+      }
+      else if(betActive && isRunning) {
+        betHistories.push({
+          type: "Cashed Out",
+          bet: betValue,
+          multiplier: currentMultiplier.toFixed(2),
+          winnings: (betValue * currentMultiplier).toFixed(2),
+          time: new Date().toLocaleTimeString()
+        });
+        balance += (betValue * currentMultiplier);
+        updateBalanceDisplay();
+        statusMessageEl.textContent = "Cashed out successfully.";
+        betActive = false;
+        betValue = 0;
+        betBtn.textContent = `Place Bet ${parseBet(betInputEl).toFixed(2)} PKR`;
+      }
+    });
+
+    // Auto Bet Controls
+    autoBetMinus.addEventListener('click', () => {
+      let val = parseBet(autoBetInputEl);
+      val = Math.max(0, val - 1);
+      autoBetInputEl.value = val.toFixed(2);
+      autoBetBtn.textContent = `Auto Bet ${val.toFixed(2)} PKR`;
+    });
+    autoBetPlus.addEventListener('click', () => {
+      let val = parseBet(autoBetInputEl);
+      val += 1;
+      autoBetInputEl.value = val.toFixed(2);
+      autoBetBtn.textContent = `Auto Bet ${val.toFixed(2)} PKR`;
+    });
+
+    autoBetBtn.addEventListener('click', () => {
+      // Only trigger auto bet if manual bet is not active
+      if(bettingOpen && !autoBetActive && !betActive) {
+        autoBetValue = parseBet(autoBetInputEl);
+        if(autoBetValue <= 0) {
+          statusMessageEl.textContent = "Invalid auto bet amount.";
+          return;
+        }
+        if(autoBetValue > balance) {
+          statusMessageEl.textContent = "Insufficient balance for auto bet.";
+          return;
+        }
+        autoBetActive = true;
+        balance -= autoBetValue;
+        updateBalanceDisplay();
+        autoBetBtn.textContent = "Cash Out";
+        statusMessageEl.textContent = "Auto Bet placed. Click 'Cash Out' to exit.";
+      }
+      else if(autoBetActive && isRunning) {
+        betHistories.push({
+          type: "Auto Cashed Out",
+          bet: autoBetValue,
+          multiplier: currentMultiplier.toFixed(2),
+          winnings: (autoBetValue * currentMultiplier).toFixed(2),
+          time: new Date().toLocaleTimeString()
+        });
+        balance += (autoBetValue * currentMultiplier);
+        updateBalanceDisplay();
+        statusMessageEl.textContent = "Auto bet cashed out successfully.";
+        autoBetActive = false;
+        autoBetValue = 0;
+        autoBetBtn.textContent = `Auto Bet ${parseBet(autoBetInputEl).toFixed(2)} PKR`;
+      }
+    });
+
+    /****************************************************
+     ************ Bet History Modal Actions *************
+     ****************************************************/
+    betHistoryBtn.addEventListener("click", () => {
+      renderBetHistories();
+      betHistoryModal.style.display = "flex";
+    });
+    closeModalBtn.addEventListener("click", () => {
+      betHistoryModal.style.display = "none";
+    });
+
+    function renderBetHistories() {
+      if(betHistories.length === 0) {
+        betHistoryList.innerHTML = "<p>No bet histories available.</p>";
+      } else {
+        betHistoryList.innerHTML = "";
+        betHistories.forEach(entry => {
+          const entryDiv = document.createElement("div");
+          entryDiv.style.borderBottom = "1px solid #555";
+          entryDiv.style.padding = "5px 0";
+          entryDiv.innerHTML = `
+            <strong>${entry.type}</strong> - Bet: ${entry.bet} PKR
+            ${entry.multiplier ? ` | Multiplier: ${entry.multiplier}x` : ""}
+            ${entry.winnings ? ` | Winnings: ${entry.winnings} PKR` : ""}
+            <br><small>${entry.time}</small>
+          `;
+          betHistoryList.appendChild(entryDiv);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
