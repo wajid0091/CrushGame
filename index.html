@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ur"> <!-- Changed lang to Urdu -->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Aviator Crash Game</title>
+
+  <!-- Firebase v9+ SDK -->
+  <script type="module">
+    // Firebase initialization code remains the same...
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"; // Added signInWithCustomToken
+    import { getDatabase, ref, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
+
+    // *** اہم: یقینی بنائیں کہ یہ کنفیگریشن آپ کے Firebase پروجیکٹ سے بالکل مماثل ہے ***
+    const firebaseConfig = {
+      apiKey: "AIzaSyACWflEuk20fwT9FxoIZAmUY9UoHeU9HWY", // Note: Consider securing API keys properly in production
+      authDomain: "lacky-777.firebaseapp.com",
+      databaseURL: "https://lacky-777-default-rtdb.firebaseio.com",
+      projectId: "lacky-777",
+      storageBucket: "lacky-777.firebasestorage.app",
+      messagingSenderId: "511980111053",
+      appId: "1:511980111053:web:638227b3b60c98878b1584",
+      measurementId: "G-DEND6HY1QP"
+    };
+
+    try {
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
+
+        window.fb_auth = auth;
+        window.fb_database = database;
+        window.fb_ref = ref;
+        window.fb_set = set;
+        window.fb_onValue = onValue;
+        window.fb_update = update;
+        window.fb_get = get;
+        window.fb_onAuthStateChanged = onAuthStateChanged;
+        window.fb_signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.fb_createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.fb_signOut = signOut;
+        window.fb_signInWithCustomToken = signInWithCustomToken; // Export the new function
+
+        window.firebaseReady = true;
+        document.dispatchEvent(new Event('firebaseReady'));
+        console.log("Firebase Initialized Successfully.");
+    } catch (error) {
+        console.error("Firebase initialization failed:", error);
+        // Display a user-friendly error message on the login panel
+        const authMsgElement = document.getElementById('authMessage');
+        if (authMsgElement) {
+            authMsgElement.textContent = "Initialization Error. Check console.";
+        }
+        // Also try showing error on loading panel if it's visible
+        const loadingMsgElement = document.getElementById('loadingMessage');
+         if (loadingMsgElement) {
+            loadingMsgElement.textContent = "Firebase Initialization Error!";
+         }
+    }
+  </script>
+
+  <style>
+    /* Basic Reset */
+    html, body {
+      margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%;
+      -webkit-user-select: none; -ms-user-select: none; user-select: none;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f1923; color: #ccc;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    /* --- NEW: Loading Panel --- */
+    #loadingPanel {
+        display: flex; /* Show by default */
+        flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; height: 100%; background: #0f1923; color: #fff;
+        position: fixed; top: 0; left: 0; z-index: 2000; /* Ensure it's on top */
+    }
+    .spinner {
+        border: 5px solid #f3f3f3; /* Light grey */
+        border-top: 5px solid #e91e63; /* Pink */
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    #loadingMessage {
+        font-size: 1.2rem;
+        color: #e0e0e0;
+    }
+
+    /* --- NEW: Continue Panel --- */
+     #continuePanel {
+        display: none; /* Hide by default */
+        flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; height: 100%; background: #0f1923; color: #fff;
+        position: fixed; top: 0; left: 0; z-index: 1900;
+     }
+     #continuePanel h2 { margin-bottom: 25px; color: #e0e0e0; font-weight: 300; }
+     #continueBtn {
+        padding: 14px 35px; border: none; border-radius: 5px;
+        background: linear-gradient(135deg, #16a34a, #15803d); color: #fff;
+        cursor: pointer; font-size: 18px; font-weight: bold;
+        transition: background 0.3s ease, transform 0.1s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+     }
+     #continueBtn:hover { background: linear-gradient(135deg, #22c55e, #16a34a); transform: translateY(-1px); }
+     #continueBtn:active { transform: translateY(0px); }
+
+
+    /* Login Panel */
+    #loginPanel {
+      display: none; /* Hide by default */
+      flex-direction: column; align-items: center; justify-content: center;
+      width: 100%; height: 100%; background: #0f1923; color: #fff;
+      position: fixed; top: 0; left: 0; z-index: 1800; /* Lower z-index */
+    }
+    #loginPanel h1 { margin-bottom: 25px; color: #e0e0e0; font-weight: 300; letter-spacing: 1px; }
+    #loginPanel input {
+      width: 80%; max-width: 300px; padding: 12px 15px; margin: 8px 0;
+      border: 1px solid #334155; border-radius: 5px; background-color: #1e293b;
+      color: #e0e0e0; font-size: 16px; box-sizing: border-box;
+    }
+    #loginPanel button {
+      padding: 12px 25px; margin: 15px 5px 5px 5px; border: none; border-radius: 5px;
+      background: linear-gradient(135deg, #e91e63, #c2185b); color: #fff;
+      cursor: pointer; font-size: 16px; font-weight: bold;
+      transition: background 0.3s ease, transform 0.1s ease, opacity 0.2s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    #loginPanel button:hover { background: linear-gradient(135deg, #ff4081, #e91e63); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+    #loginPanel button:active { transform: translateY(0px); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    #loginPanel button:disabled {
+        background: #475569; /* Different style for disabled */
+        cursor: not-allowed;
+        opacity: 0.6;
+        transform: none;
+        box-shadow: none;
+    }
+    #authMessage { margin-top: 15px; font-size: 14px; min-height: 20px; color: #ffcc80; }
+
+    /* Game Panel */
+    #gamePanel {
+        display: none; /* Hide by default */
+        flex-direction: column; width: 100%; height: 100%;
+        position: relative; /* Needed so other panels can overlay */
+        z-index: 100; /* Below overlays */
+    }
+    /* Top Bar */
+    .top-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      background-color: #1e293b; padding: 8px 15px; border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
+    .top-left-icons svg { height: 20px; width: 20px; margin-right: 15px; opacity: 0.7; cursor: pointer; stroke: #94a3b8; }
+    .top-left-icons svg:hover { opacity: 1; stroke: #e2e8f0;}
+    .balance-amount {
+      font-size: 0.95rem; font-weight: bold; color: #90ee90;
+      background-color: rgba(0,128,0,0.1); padding: 4px 10px; border-radius: 15px;
+    }
+    .top-button {
+      background: none; border: 1px solid #475569; border-radius: 5px;
+      padding: 5px 10px; color: #94a3b8; cursor: pointer; font-size: 0.9rem;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    .top-button:hover { background-color: #334155; color: #e2e8f0; }
+
+    /* Round History */
+    .history-panel {
+      padding: 8px 10px; text-align: left; background-color: #16202a; white-space: nowrap;
+      overflow-x: auto; border-bottom: 1px solid #334155; flex-shrink: 0;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .history-panel::-webkit-scrollbar { display: none; }
+    .history-panel span {
+      padding: 4px 8px; margin: 0 3px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;
+      display: inline-block; cursor: default; color: #fff;
+      background-color: rgba(255,255,255,0.08);
+    }
+    .history-panel span.low { color: #ff7f7f; background-color: rgba(255,127,127,0.15); }
+    .history-panel span.medium { color: #ffd700; background-color: rgba(255,215,0,0.15); }
+    .history-panel span.high { color: #add8e6; background-color: rgba(173,216,230,0.15); }
+    .history-panel span.very-high { color: #f080f0; background-color: rgba(240,128,240,0.15); }
+
+    /* Graph Area Container */
+    .graph-outer-container {
+      display: flex; justify-content: center; align-items: center;
+      padding: 5px; min-height: 320px; box-sizing: border-box;
+      flex-shrink: 0; flex-grow: 1;
+    }
+    .graph-container {
+      position: relative; width: 100%; max-width: 600px; height: 100%;
+      border-radius: 8px; overflow: hidden; background-color: #000;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px),
+        radial-gradient(circle at center, rgba(0,120,255,0.35) 0%, rgba(0,30,80,0) 60%);
+      background-size: 25px 25px, 25px 25px, 100% 100%;
+      background-position: 0 0, 0 0, center;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 10px; box-sizing: border-box;
+    }
+    /* Graph Axes */
+    .graph-container::before {
+      content: ''; position: absolute; left: 20px; top: 0; bottom: 20px; width: 2px;
+      background-color: rgba(255,255,255,0.2); z-index: 1;
+    }
+    .graph-container::after {
+      content: ''; position: absolute; bottom: 20px; left: 20px; right: 0; height: 2px;
+      background-color: rgba(255,255,255,0.2); z-index: 1;
+    }
+
+    /* Plane Image and Animations */
+    #planeImg {
+      position: absolute; width: 60px; height: auto; z-index: 3;
+      left: 25px; bottom: 25px; transform: rotate(0deg);
+      content: url('https://imgur.com/bSdozZz.png'); transition: none;
+    }
+    @keyframes flyAcrossNew {
+       0% { left: 25px; bottom: 25px; transform: rotate(0deg); }
+       100% { left: calc(100% - 60px); bottom: calc(100% - 60px); transform: rotate(20deg); }
+    }
+    #planeImg.is-flying-new { animation: flyAcrossNew 3s linear forwards; }
+    @keyframes hoverInPlaceNew {
+       0% { transform: rotate(20deg) translateY(0px); }
+       50% { transform: rotate(18deg) translateY(-4px); }
+       100% { transform: rotate(20deg) translateY(0px); }
+    }
+    #planeImg.is-hovering-new {
+       left: calc(100% - 60px); bottom: calc(100% - 60px); transform: rotate(20deg);
+       animation: hoverInPlaceNew 1.5s infinite alternate ease-in-out;
+    }
+    .reset-plane-new { left: 25px; bottom: 25px; transform: rotate(0deg); animation: none; }
+
+    /* Line Trail and Fill SVG */
+    #planeTrailSvg {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 2; pointer-events: none; display: none;
+    }
+    #planeTrailFill { fill: rgba(255, 77, 77, 0.8); stroke: none; }
+    #planeTrailLine { stroke: #ff4d4d; stroke-width: 3; stroke-linecap: round; }
+
+    /* Left & Bottom Dots */
+    .left-dots { position: absolute; left: 0; top: 20px; bottom: 20px; display: flex; flex-direction: column; justify-content: space-around; z-index: 2; padding-left: 5px; }
+    .left-dots span { display: block; width: 8px; height: 8px; background: rgba(255,255,255,0.7); border-radius: 50%; }
+    .bottom-dots { position: absolute; left: 20px; right: 20px; bottom: 0; display: flex; flex-direction: row; justify-content: space-around; z-index: 2; padding-bottom: 5px; }
+    .bottom-dots span { display: block; width: 8px; height: 8px; background: rgba(255,255,255,0.7); border-radius: 50%; }
+    .left-dots.animate-dots span { animation: leftDotsMove 3s infinite linear; }
+    .bottom-dots.animate-dots span { animation: bottomDotsMove 3s infinite linear; }
+    @keyframes leftDotsMove { 0% { transform: translateY(0); opacity: 0.7; } 50% { transform: translateY(-15px); opacity: 0.2; } 100% { transform: translateY(0); opacity: 0.7; } }
+    @keyframes bottomDotsMove { 0% { transform: translateX(0); opacity: 0.7; } 50% { transform: translateX(-15px); opacity: 0.2; } 100% { transform: translateX(0); opacity: 0.7; } }
+
+    /* Multiplier Overlay */
+    #multiplierValue { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(1); font-size: 3.8rem; font-weight: bold; color: #fff; text-shadow: 0 2px 5px rgba(0,0,0,0.7); z-index: 5; line-height: 1; transition: opacity 0.3s ease, color 0.3s ease; opacity: 0; }
+    @keyframes multiplierBlast { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+    #multiplierValue.visible { opacity: 1; animation: multiplierBlast 0.5s ease-out forwards; }
+    #multiplierValue.crashed { color: #ff7f7f; animation: none; }
+
+    /* Status Text Area */
+     #gameStatusContainer { text-align: center; padding: 5px 10px; min-height: 40px; flex-shrink: 0; position: relative; }
+     #flyingStatus, #betTimer { font-size: 1.5rem; font-weight: bold; opacity: 0; transition: opacity 0.3s ease; display: inline-block; margin: 0 auto; width: 100%; position: absolute; left: 0; top: 5px; }
+     #flyingStatus { color: #ffc107; text-shadow: 0 0 5px rgba(255,193,7,0.5); }
+     #betTimer { color: #fff; padding: 5px 10px; border-radius: 5px; }
+     #flyingStatus.visible, #betTimer.visible { opacity: 1; position: relative; }
+
+    /* Betting Section */
+     .betting-section { padding: 8px 5px 5px 5px; background-color: #16202a; border-top: 1px solid #334155; flex-shrink: 0; display: flex; flex-direction: column; gap: 5px; }
+     .betting-container { width: 100%; background-color: #1e293b; border-radius: 6px; padding: 5px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; box-sizing: border-box; }
+     .bet-input-area { display: flex; width: 100%; align-items: center; background-color: #0f1923; border-radius: 4px; padding: 5px; border: 1px solid #334155; }
+     .bet-input-area input { flex-grow: 1; text-align: center; border: none; background-color: transparent; color: #e0e0e0; font-size: 1rem; font-weight: bold; padding: 8px 5px; min-width: 60px; box-sizing: border-box; appearance: textfield; -moz-appearance: textfield; }
+     .bet-input-area input::-webkit-outer-spin-button, .bet-input-area input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+     .bet-input-area span { color: #64748b; font-size: 0.8rem; margin: 0 8px; }
+     .bet-input-area button { width: 35px; height: 35px; background-color: #334155; border: none; border-radius: 4px; color: #cbd5e1; font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s ease; line-height: 35px; }
+     .bet-input-area button:hover { background-color: #475569; }
+     .bet-quick-options { display: flex; gap: 5px; width: 100%; margin-top: 5px; }
+     .bet-quick-options button { flex-grow: 1; background-color: #334155; border: none; border-radius: 4px; padding: 6px 0; color: #cbd5e1; font-size: 0.85rem; cursor: pointer; transition: background-color 0.2s ease; }
+     .bet-quick-options button:hover { background-color: #475569; }
+     .bet-button { background: linear-gradient(135deg, #16a34a, #15803d); border: none; border-radius: 6px; padding: 12px 15px; color: #fff; cursor: pointer; font-size: 1.1rem; font-weight: bold; width: 100%; text-align: center; transition: background 0.3s ease, transform 0.1s ease; margin-top: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+     .bet-button:hover { background: linear-gradient(135deg, #22c55e, #16a34a); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+     .bet-button:active { transform: translateY(0px); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+     .bet-button.cashout { background: linear-gradient(135deg, #f97316, #ea580c); }
+     .bet-button.cashout:hover { background: linear-gradient(135deg, #fb923c, #f97316); }
+     .bet-button:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; transform: none; box-shadow: none; }
+
+    /* Bet History Modal */
+    #betHistoryModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 15px; box-sizing: border-box; }
+    .modal-content { background-color: #1e293b; color: #cbd5e1; width: 100%; max-width: 500px; max-height: 80%; overflow-y: auto; padding: 20px; border-radius: 8px; position: relative; border: 1px solid #334155; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+    .close-modal { position: absolute; top: 10px; right: 15px; font-size: 1.8rem; font-weight: bold; color: #64748b; cursor: pointer; line-height: 1; }
+    .close-modal:hover { color: #94a3b8; }
+    .modal-content h3 { color: #e2e8f0; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+    #betHistoryList div { border-bottom: 1px solid #334155; padding: 8px 0; font-size: 0.9rem; }
+    #betHistoryList div:last-child { border-bottom: none; }
+    #betHistoryList strong { color: #90ee90; } /* Default green, JS overrides color */
+    #betHistoryList small { color: #64748b; display: block; margin-top: 3px; }
+
+    /* Responsive adjustments */
+     @media (max-width: 480px) { .graph-outer-container { min-height: 250px; } #multiplierValue { font-size: 3rem; } #flyingStatus, #betTimer { font-size: 1.3rem; } .betting-section { padding: 5px; } .betting-container { padding: 5px 10px; } .bet-input-area button { width: 30px; height: 30px; font-size: 1rem; line-height: 30px; } .bet-quick-options button { font-size: 0.75rem; padding: 5px 0; } .bet-button { padding: 10px 12px; font-size: 1rem; } .top-bar { padding: 6px 10px; } .balance-amount { font-size: 0.85rem; padding: 3px 8px; } .top-left-icons svg { height: 18px; width: 18px; margin-right: 10px; } .history-panel span { padding: 3px 6px; font-size: 0.8rem; } }
+     @media (max-height: 700px) and (min-width: 481px) { .graph-outer-container { min-height: 280px; flex-grow: 0;} #gameStatusContainer { min-height: 35px; } #flyingStatus, #betTimer { font-size: 1.2rem; top: 3px; } .betting-section { padding-top: 5px;} }
+     @media (max-height: 600px) { .graph-outer-container { min-height: 220px; flex-grow: 0;} #multiplierValue { font-size: 2.5rem; } #gameStatusContainer { min-height: 30px; } #flyingStatus, #betTimer { font-size: 1.1rem; top: 2px;} .betting-section { padding: 3px; gap: 3px;} .betting-container { padding: 4px 8px; gap: 4px;} .bet-button { padding: 8px 10px; font-size: 0.9rem; margin-top: 3px;} }
+     body { height: 100vh; }
+     #gamePanel { height: 100%; }
+     .graph-outer-container { flex-grow: 1; min-height: 200px; }
+
+  </style>
+</head>
+<body>
+
+  <!-- NEW: Loading Panel -->
+  <div id="loadingPanel">
+    <div class="spinner"></div>
+    <div id="loadingMessage">Loading Game...</div>
+  </div>
+
+  <!-- NEW: Continue Panel -->
+  <div id="continuePanel">
+    <h2>Login Successful</h2>
+    <button id="continueBtn">Continue to Game</button>
+  </div>
+
+  <!-- Login Panel -->
+  <div id="loginPanel">
+    <h1>Aviator Game</h1>
+    <input type="email" id="emailInput" placeholder="Email">
+    <input type="password" id="passwordInput" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <button id="registerBtn">Register</button>
+    <p id="authMessage"></p>
+  </div>
+
+  <!-- Game Panel (Structure remains the same) -->
+  <div id="gamePanel">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="top-left-icons">
+         <svg id="betHistoryBtnIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+         <svg id="soundToggleBtn" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 10 2 10 2 14 6 14 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+      </div>
+      <div class="balance-amount" id="balanceAmount">Balance: 0.00 COINS</div>
+      <button id="logoutBtn" class="top-button">Logout</button>
+    </div>
+    <!-- Round History -->
+    <div class="history-panel" id="historyPanel">
+      <!-- Populated by JS -->
+    </div>
+    <!-- Graph Area -->
+    <div class="graph-outer-container">
+      <div class="graph-container">
+        <!-- SVG for Line Trail AND Fill Area -->
+        <svg id="planeTrailSvg">
+            <polygon id="planeTrailFill" points="" />
+            <line id="planeTrailLine" x1="25" y1="calc(100% - 25px)" x2="25" y2="calc(100% - 25px)" />
+        </svg>
+        <!-- Plane Image -->
+        <img src="https://imgur.com/bSdozZz.png" alt="Plane" id="planeImg">
+        <!-- Left Dots -->
+        <div class="left-dots">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <!-- Bottom Dots -->
+        <div class="bottom-dots">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <!-- Multiplier Overlay -->
+        <div id="multiplierValue">1.00x</div>
+      </div>
+    </div>
+    <!-- Status Text Area -->
+    <div id="gameStatusContainer">
+      <div id="flyingStatus">Flying...</div>
+      <div id="betTimer">Place Bets! 5s</div>
+    </div>
+    <!-- Betting Section -->
+    <div class="betting-section">
+      <!-- Bet Control Block 1 -->
+      <div class="betting-container">
+        <div class="bet-input-area">
+          <button id="betMinus1">-</button>
+          <input type="number" id="betInput1" value="10.00" step="10" min="10">
+          <span>COINS</span>
+          <button id="betPlus1">+</button>
+        </div>
+        <div class="bet-quick-options">
+          <button data-value="100" class="quick-bet-btn" data-target="betInput1">100</button>
+          <button data-value="200" class="quick-bet-btn" data-target="betInput1">200</button>
+          <button data-value="500" class="quick-bet-btn" data-target="betInput1">500</button>
+          <button data-value="1000" class="quick-bet-btn" data-target="betInput1">1000</button>
+        </div>
+        <button class="bet-button" id="betBtn1">BET</button>
+      </div>
+      <!-- Bet Control Block 2 -->
+      <div class="betting-container">
+        <div class="bet-input-area">
+          <button id="betMinus2">-</button>
+          <input type="number" id="betInput2" value="10.00" step="10" min="10">
+          <span>COINS</span>
+          <button id="betPlus2">+</button>
+        </div>
+        <div class="bet-quick-options">
+          <button data-value="100" class="quick-bet-btn" data-target="betInput2">100</button>
+          <button data-value="200" class="quick-bet-btn" data-target="betInput2">200</button>
+          <button data-value="500" class="quick-bet-btn" data-target="betInput2">500</button>
+          <button data-value="1000" class="quick-bet-btn" data-target="betInput2">1000</button>
+        </div>
+        <button class="bet-button" id="betBtn2">BET</button>
+      </div>
+    </div>
+  </div>
+  <!-- Bet History Modal -->
+  <div id="betHistoryModal">
+    <div class="modal-content">
+      <span class="close-modal" id="closeModalBtn">×</span>
+      <h3>Bet History</h3>
+      <div id="betHistoryList"></div>
+    </div>
+  </div>
+
+  <script>
+    // Wait for the firebaseReady event before executing game logic
+    document.addEventListener('firebaseReady', () => {
+      // Ensure Firebase objects are available
+      if (!window.fb_auth || !window.fb_database) {
+          console.error("Firebase objects not found on window. Retrying...");
+          const loadingMsg = document.getElementById('loadingMessage');
+          if(loadingMsg) loadingMsg.textContent = "Critical Error: Firebase load failed.";
+          // Optionally hide spinner?
+          return;
+      }
+
+      const auth = window.fb_auth;
+      const database = window.fb_database;
+      const ref = window.fb_ref;
+      const set = window.fb_set;
+      const onValue = window.fb_onValue;
+      const update = window.fb_update;
+      const get = window.fb_get;
+      const onAuthStateChanged = window.fb_onAuthStateChanged;
+      const signInWithEmailAndPassword = window.fb_signInWithEmailAndPassword;
+      const createUserWithEmailAndPassword = window.fb_createUserWithEmailAndPassword;
+      const signOut = window.fb_signOut;
+      const signInWithCustomToken = window.fb_signInWithCustomToken; // Get the function
+
+      // --- Game Config ---
+      const BETTING_DURATION = 5;
+      const CRASH_DELAY = 3000;
+      const MULTIPLIER_UPDATE_INTERVAL = 150;
+      const MAX_ROUND_HISTORY_DISPLAY = 20;
+      const MAX_MODAL_HISTORY = 50;
+      const PLANE_FLIGHT_DURATION = 3000;
+      const AUTO_LOGIN_TIMEOUT = 5000; // Max time to wait for auto-login attempt (ms)
+
+      const DEFAULT_ROUND_HISTORY = ['2.15x', '1.01x', '5.80x', '1.55x', '12.03x', '3.11x', '1.98x', '1.20x', '4.50x', '1.75x', '2.90x', '8.10x'];
+
+      // --- DOM Elements ---
+      const loadingPanel = document.getElementById('loadingPanel'); // New
+      const loadingMessage = document.getElementById('loadingMessage'); // New
+      const continuePanel = document.getElementById('continuePanel'); // New
+      const continueBtn = document.getElementById('continueBtn'); // New
+      const loginPanel = document.getElementById('loginPanel');
+      const emailInput = document.getElementById('emailInput');
+      const passwordInput = document.getElementById('passwordInput');
+      const loginBtn = document.getElementById('loginBtn');
+      const registerBtn = document.getElementById('registerBtn');
+      const authMessage = document.getElementById('authMessage');
+      const gamePanel = document.getElementById('gamePanel');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const balanceAmountEl = document.getElementById('balanceAmount');
+      const historyPanel = document.getElementById('historyPanel');
+      const graphContainer = document.querySelector('.graph-container');
+      const multiplierValueEl = document.getElementById('multiplierValue');
+      const betTimerEl = document.getElementById('betTimer');
+      const flyingStatusEl = document.getElementById('flyingStatus');
+      const planeImgEl = document.getElementById('planeImg');
+      const betInputs = [document.getElementById('betInput1'), document.getElementById('betInput2')];
+      const betMinusBtns = [document.getElementById('betMinus1'), document.getElementById('betMinus2')];
+      const betPlusBtns = [document.getElementById('betPlus1'), document.getElementById('betPlus2')];
+      const betBtns = [document.getElementById('betBtn1'), document.getElementById('betBtn2')];
+      const quickBetBtns = document.querySelectorAll('.quick-bet-btn');
+      const betHistoryBtnIcon = document.getElementById('betHistoryBtnIcon');
+      const betHistoryModal = document.getElementById('betHistoryModal');
+      const closeModalBtn = document.getElementById('closeModalBtn');
+      const betHistoryList = document.getElementById('betHistoryList');
+      const leftDotsEl = document.querySelector('.left-dots');
+      const bottomDotsEl = document.querySelector('.bottom-dots');
+      const soundToggleBtn = document.getElementById('soundToggleBtn');
+      const planeTrailSvgEl = document.getElementById('planeTrailSvg');
+      const planeTrailLineEl = document.getElementById('planeTrailLine');
+      const planeTrailFillEl = document.getElementById('planeTrailFill');
+
+      // --- State Variables ---
+      let currentUser = null;
+      let balance = 0;
+      let bets = [{ active: false, value: 0, cashedOut: false, hasPlaced: false }, { active: false, value: 0, cashedOut: false, hasPlaced: false }];
+      let currentMultiplier = 1.00;
+      let crashPoint = 0;
+      let gameState = 'LOADING'; // Initial state is LOADING
+      let roundInterval = null;
+      let bettingCountdownInterval = null;
+      let countdownValue = BETTING_DURATION;
+      let gameLoopTimeout = null;
+      let betHistories = [];
+      let roundHistories = [];
+      let graphWidth = 0;
+      let graphHeight = 0;
+      const roundHistoryRef = ref(database, 'game/history');
+      let userBalanceRef = null;
+      let userBetHistoryRef = null;
+      let roundStartTime = 0;
+      let planeHoverTimeout = null;
+      let isAuthInProgress = false;
+      let autoLoginAttempted = false; // Flag to prevent multiple auto-login attempts
+
+      // --- Sound ---
+      let soundsEnabled = false;
+      function playSound(type) { if (!soundsEnabled) return; console.log("Playing sound:", type); /* Add sound logic */ }
+      function toggleSound() { soundsEnabled = !soundsEnabled; if (soundsEnabled) { soundToggleBtn.style.opacity = '1'; soundToggleBtn.innerHTML = '<polygon points="11 5 6 10 2 10 2 14 6 14 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>'; } else { soundToggleBtn.style.opacity = '0.5'; soundToggleBtn.innerHTML = '<polygon points="11 5 6 10 2 10 2 14 6 14 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>'; } console.log("Sounds " + (soundsEnabled ? "enabled" : "disabled")); }
+      if (soundToggleBtn) { soundToggleBtn.addEventListener('click', toggleSound); toggleSound(); toggleSound(); } // Initialize sound state
+
+      // --- Core Functions (mostly unchanged, added dimension update) ---
+      function updateGraphDimensions() { if (graphContainer) { graphWidth = graphContainer.clientWidth; graphHeight = graphContainer.clientHeight; } }
+      function updateBalanceDisplay() { balanceAmountEl.textContent = `Balance: ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COINS`; }
+      function updateBalanceInDB(newBalance) { balance = newBalance; if (currentUser && userBalanceRef) { set(userBalanceRef, balance).catch(err => console.error("DB Balance Update Error:", err)); } updateBalanceDisplay(); }
+      function saveBetHistory(betData) { betHistories.unshift(betData); if (betHistories.length > MAX_MODAL_HISTORY * 2) { betHistories.pop(); } renderBetHistories(); if (currentUser && userBetHistoryRef) { const historyToSave = betHistories.slice(0, MAX_MODAL_HISTORY * 2); set(userBetHistoryRef, historyToSave).catch(e => console.error("DB Error saving bet history:", e)); } }
+      function parseBet(inputEl) { const val = parseFloat(inputEl.value); const minBet = parseFloat(inputEl.min) || 1; return isNaN(val) || val < minBet ? 0 : val; }
+      function renderHistoryItem(multiplierText) { const span = document.createElement("span"); span.textContent = multiplierText; const multiplier = parseFloat(multiplierText.replace('x', '')); if (isNaN(multiplier)) { span.className = 'medium'; } else if (multiplier < 1.5) span.className = 'low'; else if (multiplier < 3) span.className = 'medium'; else if (multiplier < 10) span.className = 'high'; else span.className = 'very-high'; historyPanel.appendChild(span); }
+      function updateHistoryPanel() { historyPanel.innerHTML = ""; const displayHistory = roundHistories.slice(0, MAX_ROUND_HISTORY_DISPLAY); const source = displayHistory.length > 0 ? displayHistory : DEFAULT_ROUND_HISTORY.slice(0, MAX_ROUND_HISTORY_DISPLAY); source.forEach(renderHistoryItem); historyPanel.scrollLeft = 0; }
+
+      function updateGraphAndPlane(multiplier) {
+        if (!graphContainer || !planeTrailLineEl || !planeTrailFillEl || graphHeight <= 0 || graphWidth <= 0) return;
+        const AXIS_OFFSET_LEFT = 20; const AXIS_OFFSET_BOTTOM = 20;
+        if (gameState === 'FLYING') {
+            const elapsedTime = Date.now() - roundStartTime; const flightProgress = Math.min(1, elapsedTime / PLANE_FLIGHT_DURATION);
+            const startX = 25 + 5; const startY = graphHeight - 25 - 5;
+            const targetEndX = graphWidth - 60; const targetEndY = 60;
+            const currentX = startX + (targetEndX - startX) * flightProgress; const currentY = startY + (targetEndY - startY) * flightProgress;
+            planeTrailLineEl.setAttribute('x1', startX.toFixed(1)); planeTrailLineEl.setAttribute('y1', startY.toFixed(1));
+            planeTrailLineEl.setAttribute('x2', currentX.toFixed(1)); planeTrailLineEl.setAttribute('y2', currentY.toFixed(1));
+            const groundY = graphHeight - AXIS_OFFSET_BOTTOM;
+            const pointsString = `${startX.toFixed(1)},${startY.toFixed(1)} ${currentX.toFixed(1)},${currentY.toFixed(1)} ${currentX.toFixed(1)},${groundY} ${startX.toFixed(1)},${groundY}`;
+            planeTrailFillEl.setAttribute('points', pointsString);
+            multiplierValueEl.textContent = multiplier.toFixed(2) + 'x';
+            bets.forEach((bet, index) => { if (bet.active && !bet.cashedOut && bet.hasPlaced) { betBtns[index].textContent = `CASHOUT ${multiplier.toFixed(2)}x`; } });
+        }
+      }
+
+      function resetVisuals() {
+        updateGraphDimensions(); // Ensure dimensions are up-to-date
+        multiplierValueEl.classList.remove('visible', 'crashed');
+        flyingStatusEl.classList.remove('visible'); betTimerEl.classList.remove('visible');
+        multiplierValueEl.textContent = '1.00x'; multiplierValueEl.style.color = '#fff';
+        leftDotsEl.classList.remove('animate-dots'); bottomDotsEl.classList.remove('animate-dots');
+        planeImgEl.classList.remove('is-flying-new', 'is-hovering-new'); planeImgEl.classList.add('reset-plane-new');
+        planeImgEl.style.animation = ''; void planeImgEl.offsetWidth;
+        if (planeTrailSvgEl && planeTrailLineEl && planeTrailFillEl && graphHeight > 0) {
+            const AXIS_OFFSET_BOTTOM = 20; const startX = 25 + 5; const startY = graphHeight - 25 - 5; const groundY = graphHeight - AXIS_OFFSET_BOTTOM;
+            planeTrailLineEl.setAttribute('x1', startX.toFixed(1)); planeTrailLineEl.setAttribute('y1', startY.toFixed(1));
+            planeTrailLineEl.setAttribute('x2', startX.toFixed(1)); planeTrailLineEl.setAttribute('y2', startY.toFixed(1));
+            planeTrailFillEl.setAttribute('points', `${startX.toFixed(1)},${startY.toFixed(1)} ${startX.toFixed(1)},${startY.toFixed(1)} ${startX.toFixed(1)},${groundY} ${startX.toFixed(1)},${groundY}`);
+            planeTrailSvgEl.style.display = 'none';
+        } else if (planeTrailSvgEl) { planeTrailSvgEl.style.display = 'none'; }
+        bets.forEach((bet, index) => { bet.active = false; bet.cashedOut = false; bet.hasPlaced = false; betBtns[index].textContent = `BET`; betBtns[index].disabled = false; betBtns[index].classList.remove('cashout'); betInputs[index].disabled = false; });
+        quickBetBtns.forEach(btn => btn.disabled = false); betMinusBtns.forEach(btn => btn.disabled = false); betPlusBtns.forEach(btn => btn.disabled = false);
+      }
+
+      function pickCrashPoint() {
+        const r = Math.random(); let crash;
+        if (r < 0.50) { crash = 1 + Math.random(); } else if (r < 0.80) { crash = 2 + Math.random(); } else if (r < 0.95) { crash = 3 + Math.random() * 2; } else if (r < 0.98) { crash = 5 + Math.random() * 5; } else if (r < 0.995) { crash = 10 + Math.random() * 10; } else { crash = 20 + Math.random() * 80; }
+        return Math.max(1.01, crash).toFixed(2);
+      }
+
+      // --- Game State Management ---
+      function manageGameCycle() { clearTimeout(gameLoopTimeout); clearInterval(bettingCountdownInterval); clearInterval(roundInterval); clearTimeout(planeHoverTimeout); console.log("Managing Cycle - Current State:", gameState); if (gameState === 'WAITING' || gameState === 'CRASHED') { openBettingPhase(); } else if (gameState === 'BETTING') { startRound(); } }
+      function openBettingPhase() { gameState = 'WAITING'; // Reset state to WAITING before showing betting
+        console.log("State: WAITING (Betting Open)"); resetVisuals(); gameState = 'BETTING'; // Now set to BETTING
+        countdownValue = BETTING_DURATION; betTimerEl.textContent = `Place Bets! ${countdownValue}s`; betTimerEl.classList.add('visible'); flyingStatusEl.classList.remove('visible'); multiplierValueEl.classList.remove('visible', 'crashed'); bets.forEach((bet, index) => { betBtns[index].disabled = false; betInputs[index].disabled = false; }); quickBetBtns.forEach(btn => btn.disabled = false); betMinusBtns.forEach(btn => btn.disabled = false); betPlusBtns.forEach(btn => btn.disabled = false); bettingCountdownInterval = setInterval(() => { countdownValue--; betTimerEl.textContent = `Place Bets! ${countdownValue}s`; if (countdownValue <= 0) { clearInterval(bettingCountdownInterval); betTimerEl.textContent = "Starting..."; bets.forEach((bet, index) => { if (!bet.hasPlaced) { betBtns[index].disabled = true; betInputs[index].disabled = true; document.querySelectorAll(`.quick-bet-btn[data-target="betInput${index+1}"]`).forEach(b => b.disabled = true); betMinusBtns[index].disabled = true; betPlusBtns[index].disabled = true; } else { betBtns[index].disabled = false; betBtns[index].textContent = "WAITING..."; betInputs[index].disabled = true; document.querySelectorAll(`.quick-bet-btn[data-target="betInput${index+1}"]`).forEach(b => b.disabled = true); betMinusBtns[index].disabled = true; betPlusBtns[index].disabled = true; } }); gameLoopTimeout = setTimeout(manageGameCycle, 500); } }, 1000); }
+      function switchToHoverAnimation() { if (gameState === 'FLYING') { console.log("Switching to hover animation"); planeImgEl.classList.remove('is-flying-new'); planeImgEl.classList.add('is-hovering-new'); } }
+      function startRound() {
+        gameState = 'FLYING'; console.log("State: FLYING"); crashPoint = parseFloat(pickCrashPoint()); currentMultiplier = 1.00; roundStartTime = Date.now(); console.log(`Crash point set to: ${crashPoint}x`); playSound('start');
+        flyingStatusEl.textContent = "Flying..."; flyingStatusEl.classList.add('visible'); betTimerEl.classList.remove('visible'); multiplierValueEl.textContent = currentMultiplier.toFixed(2) + 'x'; multiplierValueEl.classList.add('visible'); multiplierValueEl.classList.remove('crashed'); multiplierValueEl.style.color = '#fff';
+        leftDotsEl.classList.add('animate-dots'); bottomDotsEl.classList.add('animate-dots');
+        bets.forEach((bet, index) => { if (bet.hasPlaced && bet.active && !bet.cashedOut) { betBtns[index].textContent = `CASHOUT ${currentMultiplier.toFixed(2)}x`; betBtns[index].classList.add('cashout'); betBtns[index].disabled = false; } else { betBtns[index].disabled = true; betBtns[index].classList.remove('cashout'); if (!bet.hasPlaced) betBtns[index].textContent = 'BET'; } });
+        planeImgEl.classList.remove('reset-plane-new', 'is-hovering-new'); planeImgEl.style.animation = ''; void planeImgEl.offsetWidth; planeImgEl.classList.add('is-flying-new'); planeTrailSvgEl.style.display = 'block';
+        clearTimeout(planeHoverTimeout); planeHoverTimeout = setTimeout(switchToHoverAnimation, PLANE_FLIGHT_DURATION);
+        roundInterval = setInterval(() => {
+            let increment = 0.01; if (currentMultiplier < 2) increment = 0.01 + (currentMultiplier * 0.005); else if (currentMultiplier < 5) increment = 0.01 + (currentMultiplier * 0.01); else if (currentMultiplier < 10) increment = 0.01 + (currentMultiplier * 0.015); else increment = 0.01 + (currentMultiplier * 0.02); currentMultiplier += increment;
+            if (currentMultiplier >= crashPoint) { crashRound(crashPoint); } else { updateGraphAndPlane(currentMultiplier); }
+        }, MULTIPLIER_UPDATE_INTERVAL);
+      }
+      function crashRound(finalMultiplier) {
+        if (gameState === 'CRASHED') return; gameState = 'CRASHED'; clearInterval(roundInterval); clearTimeout(planeHoverTimeout); console.log(`State: CRASHED at ${finalMultiplier.toFixed(2)}x`); playSound('crash');
+        multiplierValueEl.textContent = `CRASHED @ ${finalMultiplier.toFixed(2)}x`; multiplierValueEl.classList.add('crashed'); multiplierValueEl.classList.add('visible');
+        flyingStatusEl.classList.remove('visible'); betTimerEl.classList.remove('visible'); leftDotsEl.classList.remove('animate-dots'); bottomDotsEl.classList.remove('animate-dots');
+        planeImgEl.classList.remove('is-flying-new', 'is-hovering-new'); planeTrailSvgEl.style.display = 'none';
+        const historyEntry = finalMultiplier.toFixed(2) + 'x'; roundHistories.unshift(historyEntry); if (roundHistories.length > MAX_ROUND_HISTORY_DISPLAY * 2) { roundHistories.pop(); } updateHistoryPanel();
+        if (roundHistories.length > 0) { update(ref(database, 'game'), { history: roundHistories.slice(0, MAX_MODAL_HISTORY * 2) }).catch(e => console.error("FB Error updating global history:", e)); }
+        bets.forEach((bet, index) => { betBtns[index].disabled = true; betBtns[index].classList.remove('cashout'); if (bet.active && !bet.cashedOut && bet.hasPlaced) { console.log(`Bet ${index + 1} lost ${bet.value.toFixed(2)}`); betBtns[index].textContent = `LOST ${bet.value.toFixed(2)}`; saveBetHistory({ type: `Lost`, bet: bet.value, multiplier: finalMultiplier.toFixed(2), time: new Date().toLocaleTimeString() }); } else if (!bet.hasPlaced) { betBtns[index].textContent = 'BET'; } else if (bet.cashedOut) { /* Keep cashout text */ } });
+        gameLoopTimeout = setTimeout(manageGameCycle, CRASH_DELAY);
+      }
+
+      // --- NEW: Auto Login Function ---
+      async function attemptAutoLogin() {
+          if (autoLoginAttempted) return; // Only try once
+          autoLoginAttempted = true;
+          gameState = 'LOADING'; // Ensure state is loading
+          console.log("Attempting auto-login...");
+          loadingPanel.style.display = 'flex';
+          loginPanel.style.display = 'none';
+          gamePanel.style.display = 'none';
+          continuePanel.style.display = 'none';
+
+          // 1. Check for existing Firebase session (might already be logged in)
+          // We'll let onAuthStateChanged handle this implicitly.
+
+          // 2. Check for custom token in URL
+          const urlParams = new URLSearchParams(window.location.search);
+          const customToken = urlParams.get('authToken'); // Adjust param name if needed
+
+          if (customToken) {
+              console.log("Found auth token in URL parameter.");
+              loadingMessage.textContent = "Verifying session...";
+              try {
+                  await signInWithCustomToken(auth, customToken);
+                  console.log("Custom token sign-in successful.");
+                  // onAuthStateChanged will now fire with the user
+                  // Show the 'Continue' button IF the user is successfully logged in
+                  // We defer showing 'Continue' to onAuthStateChanged to be sure.
+              } catch (error) {
+                  console.error("Custom token sign-in failed:", error);
+                  loadingMessage.textContent = "Auto-login failed. Please login manually.";
+                  // Wait a bit before showing login panel
+                  setTimeout(() => {
+                      loadingPanel.style.display = 'none';
+                      loginPanel.style.display = 'flex';
+                      gameState = 'WAITING_FOR_LOGIN'; // State indicating manual login needed
+                  }, 1500);
+              }
+          } else {
+              console.log("No auth token found in URL.");
+              // If no token, rely on onAuthStateChanged to see if already logged in,
+              // or eventually show login panel if not.
+              // We add a timeout here in case onAuthStateChanged doesn't fire quickly
+              // or if there's no existing session.
+              setTimeout(() => {
+                  if (gameState === 'LOADING') { // If still loading after timeout
+                    console.log("Auto-login timeout/no token, showing login panel.");
+                    loadingPanel.style.display = 'none';
+                    loginPanel.style.display = 'flex';
+                    gameState = 'WAITING_FOR_LOGIN';
+                  }
+              }, AUTO_LOGIN_TIMEOUT);
+          }
+      }
+
+      // --- MODIFIED: Auth State Change Handler ---
+      onAuthStateChanged(auth, user => {
+        clearTimeout(gameLoopTimeout); // Clear any pending game loop starts
+        clearInterval(bettingCountdownInterval);
+        clearInterval(roundInterval);
+        clearTimeout(planeHoverTimeout);
+
+        if (user) {
+          // --- User is logged in (either manually or via auto-login) ---
+          currentUser = user;
+          console.log("onAuthStateChanged: User logged in:", user.uid);
+
+          // Decide whether to show Continue or Game panel
+          if (gameState === 'LOADING' || gameState === 'WAITING_FOR_LOGIN' || autoLoginAttempted) {
+            // If auto-login was attempted (or we were loading), show Continue panel first
+            console.log("Showing Continue Panel");
+            loadingPanel.style.display = 'none';
+            loginPanel.style.display = 'none';
+            gamePanel.style.display = 'none'; // Ensure game is hidden initially
+            continuePanel.style.display = 'flex';
+            gameState = 'AUTHENTICATED_PENDING_CONTINUE';
+            // Data fetching can happen here or after clicking Continue
+          } else {
+            // User logged in manually (or was already logged in without auto-attempt)
+            console.log("Showing Game Panel directly");
+            loadingPanel.style.display = 'none';
+            loginPanel.style.display = 'none';
+            continuePanel.style.display = 'none';
+            gamePanel.style.display = 'flex';
+            gameState = 'WAITING'; // Set state ready for game
+             // Fetch data and start game cycle *only* when game panel is shown
+             fetchUserDataAndStartGame();
+          }
+
+        } else {
+          // --- User is logged out ---
+          currentUser = null;
+          console.log("onAuthStateChanged: User logged out or not logged in.");
+          // Hide everything except login panel (unless loading is still active from a failed auto-login)
+          if (gameState !== 'LOADING') { // Don't hide loading if auto-login is still running
+             loadingPanel.style.display = 'none';
+             continuePanel.style.display = 'none';
+             gamePanel.style.display = 'none';
+             loginPanel.style.display = 'flex'; // Show login panel
+             gameState = 'WAITING_FOR_LOGIN';
+          } else {
+            console.log("Still in Loading state, login panel deferred.")
+          }
+
+          // Clear game state variables
+          window.removeEventListener('resize', updateGraphDimensions);
+          userBalanceRef = null; userBetHistoryRef = null; balance = 0; betHistories = [];
+          resetVisuals(); // Reset game visuals
+        }
+        // Reset the auto-login attempt flag if the user logs out manually
+        if (!user) {
+            autoLoginAttempted = false;
+        }
+      });
+
+      // --- NEW: Function to fetch data and start game ---
+      function fetchUserDataAndStartGame() {
+           if (!currentUser) return; // Should not happen if called correctly
+
+           console.log("Fetching user data and starting game...");
+           userBalanceRef = ref(database, `users/${currentUser.uid}/coinBalance`);
+           userBetHistoryRef = ref(database, `users/${currentUser.uid}/betHistory`);
+
+           requestAnimationFrame(() => { updateGraphDimensions(); window.addEventListener('resize', updateGraphDimensions); });
+
+           // Fetch Balance, User History, then Global History, then start game cycle
+           get(userBalanceRef).then(snapshot => {
+               if (snapshot.exists()) { balance = parseFloat(snapshot.val()) || 0; }
+               else { balance = 1000.00; set(userBalanceRef, balance).catch(e => console.error("DB Error setting initial balance:", e)); }
+               updateBalanceDisplay();
+               return get(userBetHistoryRef); // Chain the promises
+           }).then(histSnap => {
+               if (histSnap.exists() && Array.isArray(histSnap.val())) { betHistories = histSnap.val(); }
+               else { betHistories = []; }
+               renderBetHistories();
+               return get(roundHistoryRef); // Chain the promises
+           }).then(globalHistSnap => {
+               if (globalHistSnap.exists() && Array.isArray(globalHistSnap.val().history) && globalHistSnap.val().history.length > 0) {
+                   roundHistories = globalHistSnap.val().history;
+                   console.log("Loaded global history from DB:", roundHistories.length);
+               } else {
+                   roundHistories = [...DEFAULT_ROUND_HISTORY];
+                   console.log("Using default global history");
+                   update(ref(database, 'game'), { history: roundHistories.slice(0, MAX_ROUND_HISTORY_DISPLAY * 2) }).catch(e => console.warn("Could not initialize global history in DB", e));
+               }
+               updateHistoryPanel();
+               gameState = 'WAITING'; // Ready to start
+               manageGameCycle(); // Start the game cycle
+           }).catch(error => {
+               // Handle errors from any part of the chain
+               console.error("Error fetching data:", error);
+               // Fallback: Use defaults and try to start game anyway?
+               balance = balance || 0; // Keep balance if fetched, else 0
+               updateBalanceDisplay();
+               betHistories = betHistories || []; // Keep history if fetched, else empty
+               renderBetHistories();
+               roundHistories = roundHistories.length > 0 ? roundHistories : [...DEFAULT_ROUND_HISTORY]; // Keep history if fetched, else default
+               updateHistoryPanel();
+               gameState = 'WAITING';
+               manageGameCycle(); // Attempt to start cycle even with errors
+           });
+      }
+
+      // --- Event Listeners (Login/Register, Logout, Bet Controls etc. are mostly unchanged) ---
+
+      // Login/Register Button Handling
+      loginBtn.addEventListener('click', () => {
+        if (isAuthInProgress) return;
+        const email = emailInput.value.trim(); const password = passwordInput.value;
+        if (!email || !password) { authMessage.textContent = "Please enter email and password."; return; }
+        isAuthInProgress = true; loginBtn.disabled = true; registerBtn.disabled = true; authMessage.textContent = "Logging in...";
+        signInWithEmailAndPassword(auth, email, password)
+          .then(() => { authMessage.textContent = "Login Successful!"; /* onAuthStateChanged handles UI */ })
+          .catch(error => { console.error("Login Error:", error); authMessage.textContent = `Login Error: ${error.code || error.message}.`; isAuthInProgress = false; loginBtn.disabled = false; registerBtn.disabled = false; });
+      });
+      registerBtn.addEventListener('click', () => {
+        if (isAuthInProgress) return;
+        const email = emailInput.value.trim(); const password = passwordInput.value;
+        if (!email || password.length < 6) { authMessage.textContent = "Email required, password must be >= 6 chars."; return; }
+        isAuthInProgress = true; loginBtn.disabled = true; registerBtn.disabled = true; authMessage.textContent = "Registering...";
+        createUserWithEmailAndPassword(auth, email, password)
+          .then((userCredential) => { authMessage.textContent = "Registration Successful! Logging in..."; const initialBalance = 1000.00; const userDbRef = ref(database, `users/${userCredential.user.uid}`); set(userDbRef, { coinBalance: initialBalance, betHistory: [] }).catch(dbError => console.error("DB Error setting initial data:", dbError)); /* onAuthStateChanged handles UI */ })
+          .catch(error => { console.error("Registration Error:", error); authMessage.textContent = `Registration Error: ${error.code || error.message}.`; isAuthInProgress = false; loginBtn.disabled = false; registerBtn.disabled = false; });
+      });
+
+      // Logout Button
+      logoutBtn.addEventListener('click', () => {
+          console.log("Logging out...");
+          signOut(auth).catch(error => console.error("Logout failed:", error));
+      });
+
+      // Bet Input Controls (+/- buttons)
+       betMinusBtns.forEach((button, index) => { button.addEventListener('click', () => { const input = betInputs[index]; let currentValue = parseBet(input); const step = parseFloat(input.step) || 10; const min = parseFloat(input.min) || 10; currentValue = Math.max(min, currentValue - step); input.value = currentValue.toFixed(2); }); });
+       betPlusBtns.forEach((button, index) => { button.addEventListener('click', () => { const input = betInputs[index]; let currentValue = parseBet(input); const step = parseFloat(input.step) || 10; currentValue += step; input.value = currentValue.toFixed(2); }); });
+
+      // Quick Bet Buttons
+       quickBetBtns.forEach(button => { button.addEventListener('click', () => { const targetInputId = button.dataset.target; const value = parseFloat(button.dataset.value); const targetInput = document.getElementById(targetInputId); if (targetInput && !isNaN(value)) { targetInput.value = value.toFixed(2); } }); });
+
+      // Main Bet/Cashout Buttons
+       betBtns.forEach((button, index) => { button.addEventListener('click', () => { const bet = bets[index]; const input = betInputs[index]; if ((gameState === 'BETTING' || gameState === 'WAITING') && !bet.hasPlaced) { // Allow betting in WAITING too before timer starts
+           if(gameState !== 'BETTING') { // If betting before timer starts, don't disable button immediately
+                console.log("Pre-betting phase bet placed.")
+           }
+           const betAmount = parseBet(input); if (betAmount <= 0) { alert("Please enter a valid bet amount."); return; } if (betAmount > balance) { alert("Insufficient balance."); return; } updateBalanceInDB(balance - betAmount); bet.value = betAmount; bet.active = true; bet.cashedOut = false; bet.hasPlaced = true; playSound('bet'); button.textContent = "WAITING..."; button.classList.add('cashout'); button.disabled = true; input.disabled = true; document.querySelectorAll(`.quick-bet-btn[data-target="betInput${index+1}"]`).forEach(b => b.disabled = true); betMinusBtns[index].disabled = true; betPlusBtns[index].disabled = true; console.log(`Bet ${index + 1} placed: ${betAmount.toFixed(2)}`); } else if (gameState === 'FLYING' && bet.active && !bet.cashedOut && bet.hasPlaced) { const winnings = bet.value * currentMultiplier; updateBalanceInDB(balance + winnings); playSound('cashout'); saveBetHistory({ type: `Cashed Out`, bet: bet.value, multiplier: currentMultiplier.toFixed(2), winnings: winnings, time: new Date().toLocaleTimeString() }); bet.cashedOut = true; button.textContent = `CASHED OUT @ ${currentMultiplier.toFixed(2)}x`; button.disabled = true; button.classList.remove('cashout'); console.log(`Bet ${index + 1} cashed out at ${currentMultiplier.toFixed(2)}x for ${winnings.toFixed(2)}`); } }); });
+
+      // Bet History Modal Controls
+       betHistoryBtnIcon.addEventListener("click", () => { renderBetHistories(); betHistoryModal.style.display = "flex"; });
+       closeModalBtn.addEventListener("click", () => { betHistoryModal.style.display = "none"; });
+       betHistoryModal.addEventListener('click', (event) => { if (event.target === betHistoryModal) { betHistoryModal.style.display = "none"; } });
+       function renderBetHistories() { const displayList = betHistories.slice(0, MAX_MODAL_HISTORY); if (!betHistoryList) return; if (displayList.length === 0) { betHistoryList.innerHTML = "<p style='text-align: center; color: #94a3b8;'>No bet history yet.</p>"; } else { betHistoryList.innerHTML = ""; displayList.forEach(entry => { if (!entry || typeof entry.type === 'undefined' || typeof entry.bet === 'undefined') { console.warn("Skipping invalid bet history entry:", entry); return; } const div = document.createElement("div"); let statusColor = '#cbd5e1'; let details = `Bet: ${entry.bet.toFixed(2)} COINS`; let outcome = ''; let timeInfo = entry.time || new Date().toLocaleTimeString(); if (entry.type === 'Cashed Out') { statusColor = '#90ee90'; details += ` @ ${entry.multiplier || 'N/A'}x`; outcome = ` | Won: ${(entry.winnings || 0).toFixed(2)} COINS`; } else if (entry.type === 'Lost') { statusColor = '#ff7f7f'; details += ` @ ${entry.multiplier || 'N/A'}x (Crashed)`; } else { statusColor = '#ffcc80'; } div.innerHTML = `<strong style="color:${statusColor};">${entry.type}</strong> - ${details}${outcome}<br><small>${timeInfo}</small>`; betHistoryList.appendChild(div); }); } }
+
+      // --- NEW: Continue Button Listener ---
+       continueBtn.addEventListener('click', () => {
+           console.log("Continue button clicked.");
+           continuePanel.style.display = 'none';
+           gamePanel.style.display = 'flex'; // Show the main game panel
+           gameState = 'WAITING'; // Set state to ready for game cycle
+           // Fetch user data and start the game cycle now
+           fetchUserDataAndStartGame();
+       });
+
+      // --- Initial Setup ---
+      resetVisuals(); // Set initial UI state (mostly hidden now)
+      attemptAutoLogin(); // Start the auto-login process
+
+    }); // End of firebaseReady listener
+  </script>
+</body>
+</html>
